@@ -75,7 +75,22 @@ typedef struct gcf_block_struct
 
 #define GCF_EPOCH 627264000L
 
-extern void extract_24 (gcf_block b);
-extern void extract_32 (gcf_block b);
-extern void gcf_dispatch (uint8_t * buf, int sz, int recno);
+/** no error */
+#define GCFERR_OK		(0)
+
+/** the packet provided is invalid/unreadable, but correctly framed/sized.
+ * If part of a stream, the stream can continue to operate normally */
+#define GCFERR_BAD_DATA		(1)
+
+/** the packet provided is invalid/unreadable and the framing is incorrect
+ *  or indeterminate.  If part of a stream, the stream is now invalid. */
+#define GCFERR_BAD_FRAMING	(2)
+
+/** gcf_dispatch: given a buffer pointing to the GCF frame, it's size
+ * and the sequence number, attempt to decode the frame.
+ *
+ * @returns GCFERR_ constant
+ */
+extern int gcf_dispatch (uint8_t * buf, int sz, int recno);
+
 #endif /* __GCF_H__ */

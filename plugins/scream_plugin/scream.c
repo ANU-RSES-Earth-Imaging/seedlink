@@ -142,8 +142,9 @@ scm_dispatch ()
 {
   uint8_t buf[SCREAM_MAX_LENGTH];
   int blocknr;
+  int rv;
 
-  static int blocknr_prev;
+  static int blocknr_prev = 0;
 
   switch (protocol)
   {
@@ -240,5 +241,12 @@ scm_dispatch ()
   
     blocknr_prev = blocknr;
 
-    gcf_dispatch (buf, GCF_BLOCK_LEN, blocknr);
+    rv = gcf_dispatch (buf, GCF_BLOCK_LEN, blocknr);
+    if (rv != GCFERR_OK) {
+      /* some kind of error occured previous frame.  Is it fatal? */
+      if ((rv == GCFERR_BAD_FRAMING) && (protocol == SCM_PROTO_TCP)) {
+	/* framing issues only break TCP streams.  UDP sockets can keep on listening. */
+	fatal(("framing error unpacking TCP stream.  Aborting."));
+      }
+    }
 }

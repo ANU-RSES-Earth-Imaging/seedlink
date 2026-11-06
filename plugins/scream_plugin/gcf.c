@@ -50,7 +50,7 @@ gcf_time_to_time_t (gcf_time * t)
   return ret;
 }
 
-static void
+static int
 extract_8 (gcf_block b)
 {
   uint8_t *ptr = b->buf;
@@ -64,8 +64,10 @@ extract_8 (gcf_block b)
   val = gp_int32 (ptr);
   ptr += 4;
 
-  if (*ptr)
-    fatal (("First difference is not zero"));
+  if (*ptr) {
+    warn (("First difference is not zero"));
+    return GCFERR_BAD_FRAMING;
+  }
   while (n--)
     {
       val += gp_int8 (ptr++);
@@ -74,12 +76,15 @@ extract_8 (gcf_block b)
   b->fic = val;
   b->ric = gp_int32 (ptr);
 
-  if (b->fic != b->ric)
-    warn (("Fic!=Ric")); // changed all fatal's to warn
+  if (b->fic != b->ric) {
+    warn (("Fic!=Ric"));
+    return GCFERR_BAD_DATA;
+  }
 
+  return 0;
 }
 
-static void
+static int
 extract_16 (gcf_block b)
 {
   uint8_t *ptr = b->buf;
@@ -93,8 +98,10 @@ extract_16 (gcf_block b)
   val = gp_int32 (ptr);
   ptr += 4;
 
-  if (*ptr)
-    fatal (("First difference is not zero"));
+  if (*ptr) {
+    warn (("First difference is not zero"));
+    return GCFERR_BAD_FRAMING;
+  }
 
   while (n--)
     {
@@ -105,13 +112,15 @@ extract_16 (gcf_block b)
   b->fic = val;
   b->ric = gp_int32 (ptr);
 
-  if (b->fic != b->ric)
+  if (b->fic != b->ric) {
     warn (("Fic!=Ric"));
+    return GCFERR_BAD_DATA;
+  }
 
-
+  return GCFERR_OK;
 }
 
-void
+static int
 extract_24 (gcf_block b)
 {
   uint8_t *ptr = b->buf;
@@ -122,14 +131,18 @@ extract_24 (gcf_block b)
 
   ptr += 16;
 
-  if ((*ptr) && (0xff != *ptr))
-    fatal (("claimed 24 bit data isn't"));
+  if ((*ptr) && (0xff != *ptr)) {
+    warn (("claimed 24 bit data isn't"));
+    return GCFERR_BAD_FRAMING;
+  }
 
   val = gp_int32 (ptr);
   ptr += 4;
 
-  if (gp_int24 (ptr))
-    fatal (("First difference is not zero"));
+  if (gp_int24 (ptr)) {
+    warn (("First difference is not zero"));
+    return GCFERR_BAD_FRAMING;
+  }
 
   while (n--)
     {
@@ -140,19 +153,24 @@ extract_24 (gcf_block b)
       *(optr++) = val;
     }
   b->fic = val;
-  if ((*ptr) && (0xff != *ptr))
-    fatal (("claimed 24 bit data isn't"));
+  if ((*ptr) && (0xff != *ptr)) {
+    warn (("claimed 24 bit data isn't"));
+    return GCFERR_BAD_FRAMING;
+  }
 
   b->ric = gp_int32 (ptr);
 
 
-  if (b->fic != b->ric)
+  if (b->fic != b->ric) {
     warn (("Fic!=Ric"));
+    return GCFERR_BAD_DATA;
+  }
 
+  return GCFERR_OK;
 }
 
 #if 0
-void
+static int
 extract_32 (gcf_block b)
 {
   uint8_t *ptr = b->buf;
@@ -166,9 +184,11 @@ extract_32 (gcf_block b)
   val = (int64_t) gp_int32 (ptr);
   ptr += 4;
 
-  if (*ptr)
-    fatal (("First difference is not zero"));
-
+  if (*ptr) {
+    warn (("First difference is not zero"));
+    return GCFERR_BAD_FRAMING;
+  }
+  
   while (n--)
     {
       val += (int64_t) gp_int32 (ptr);
@@ -179,13 +199,16 @@ extract_32 (gcf_block b)
   b->fic = (int) val;
   b->ric = gp_int32 (ptr);
 
-  if (b->fic != b->ric)
-    fatal (("Fic!=Ric"));
+  if (b->fic != b->ric) {
+    warn (("Fic!=Ric"));
+    return GCFERR_BAD_DATA;
+  }
+
+  return GCFERR_OK;
 }
 #else
 
-
-void
+static int
 extract_32 (gcf_block b)
 {
   uint8_t *ptr = b->buf;
@@ -201,8 +224,10 @@ extract_32 (gcf_block b)
   uval = gp_uint32 (ptr);
   ptr += 4;
 
-  if (*ptr)
+  if (*ptr) {
     fatal (("First difference is not zero"));
+    return GCFERR_BAD_FRAMING;
+  }
 
   while (n--)
     {
@@ -228,20 +253,24 @@ extract_32 (gcf_block b)
   b->fic = (int) val;
   b->ric = gp_int32 (ptr);
 
-  if (b->fic != b->ric)
+  if (b->fic != b->ric) {
     warn (("Fic!=Ric"));
+    return GCFERR_BAD_DATA;
+  }
+  
+  return GCFERR_OK;
 }
 
 
 #endif
 
-
-void
+int
 gcf_dispatch (uint8_t * buf, int sz, int recno)
 {
   int i;
   uint32_t id;
   struct gcf_block_struct block;
+  int rv = GCFERR_OK;
 
   block.buf = buf;
   block.size = sz;
@@ -275,44 +304,39 @@ gcf_dispatch (uint8_t * buf, int sz, int recno)
         {
         case 4:
           block.csize = 24 + block.samples;
-          extract_8 (&block);
-          if (block.fic != block.ric)  // new
-              return;
+	  rv = extract_8 (&block);
           break;
         case 2:
           block.csize = 24 + (2 * block.samples);
-          extract_16 (&block);
-          if (block.fic != block.ric)  // new
-              return;
+          rv = extract_16 (&block);
           break;
         case 1:
           if ((sz - 24) == (4 * block.samples))
             {
               block.csize = 24 + (4 * block.samples);
-              extract_32 (&block);
-              if (block.fic != block.ric)  // new
-                  return;
+	      rv = extract_32 (&block);
             }
           else if ((sz - 24) == (3 * block.samples))
             {
               block.csize = 24 + (3 * block.samples);
-              extract_24 (&block);
-              if (block.fic != block.ric)  // new
-                  return;
+              rv = extract_24 (&block);
             }
           else
             {
               /* Guess 32 */
-              extract_32 (&block);
-              if (block.fic != block.ric)  // new
-                  return;
+              rv = extract_32 (&block);
             }
           break;
         default:
-          fatal (("unknown GCF compression format"));
+	  warn (("unknown GCF compression format"));
+	  rv = GCFERR_BAD_FRAMING;
         }
     }
 
-  //printf("now dispatch the block with %d samples .... !!!\n", block.samples);
-  dispatch (&block, recno);
+  if (rv == GCFERR_OK) {
+    //printf("now dispatch the block with %d samples .... !!!\n", block.samples);
+    dispatch (&block, recno);
+  }
+
+  return rv;
 }
