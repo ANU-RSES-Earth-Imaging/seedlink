@@ -37,6 +37,8 @@ static char rcsid[] = "$Id: gcf.c 1364 2008-10-24 18:42:33Z andres $";
 
 #include "project.h"
 
+#define warn(x) fprintf(stderr, "WARNING: %s\n", x)
+
 static time_t
 gcf_time_to_time_t (gcf_time * t)
 {
@@ -75,7 +77,7 @@ extract_8 (gcf_block b)
   b->ric = gp_int32 (ptr);
 
   if (b->fic != b->ric)
-    fatal (("Fic!=Ric"));
+    warn (("Fic!=Ric")); // changed all fatal's to warn
 
 }
 
@@ -106,7 +108,7 @@ extract_16 (gcf_block b)
   b->ric = gp_int32 (ptr);
 
   if (b->fic != b->ric)
-    fatal (("Fic!=Ric"));
+    warn (("Fic!=Ric"));
 
 
 }
@@ -147,7 +149,7 @@ extract_24 (gcf_block b)
 
 
   if (b->fic != b->ric)
-    fatal (("Fic!=Ric"));
+    warn (("Fic!=Ric"));
 
 }
 
@@ -229,7 +231,7 @@ extract_32 (gcf_block b)
   b->ric = gp_int32 (ptr);
 
   if (b->fic != b->ric)
-    fatal (("Fic!=Ric"));
+    warn (("Fic!=Ric"));
 }
 
 
@@ -276,26 +278,36 @@ gcf_dispatch (uint8_t * buf, int sz, int recno)
         case 4:
           block.csize = 24 + block.samples;
           extract_8 (&block);
+          if (block.fic != block.ric)  // new
+              return;
           break;
         case 2:
           block.csize = 24 + (2 * block.samples);
           extract_16 (&block);
+          if (block.fic != block.ric)  // new
+              return;
           break;
         case 1:
           if ((sz - 24) == (4 * block.samples))
             {
               block.csize = 24 + (4 * block.samples);
               extract_32 (&block);
+              if (block.fic != block.ric)  // new
+                  return;
             }
           else if ((sz - 24) == (3 * block.samples))
             {
               block.csize = 24 + (3 * block.samples);
               extract_24 (&block);
+              if (block.fic != block.ric)  // new
+                  return;
             }
           else
             {
               /* Guess 32 */
               extract_32 (&block);
+              if (block.fic != block.ric)  // new
+                  return;
             }
           break;
         default:
