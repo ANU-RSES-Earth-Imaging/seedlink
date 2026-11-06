@@ -23,12 +23,12 @@ INCLUDE_DIRECTORIES(../../libs/plugin)
 INCLUDE_DIRECTORIES(../../libs/3rd-party/libslink)
 INCLUDE_DIRECTORIES(libs)
 INCLUDE_DIRECTORIES(${Boost_INCLUDE_DIRS})
-INCLUDE_DIRECTORIES(${SC_SYSTEM_LIB_DIR}/3rd-party/libmseed)
+INCLUDE_DIRECTORIES(${SC_SYSTEM_LIB_DIR}/3rd-party)
 
 ADD_EXECUTABLE(caps_plugin ${CAPSPLUGIN_SOURCES})
 
 FIND_PACKAGE(OpenSSL REQUIRED)
-FIND_PACKAGE(Boost REQUIRED COMPONENTS system program_options)
+FIND_PACKAGE(Boost REQUIRED COMPONENTS program_options OPTIONAL_COMPONENTS system)
 
 TARGET_LINK_LIBRARIES(
 	caps_plugin
@@ -36,11 +36,14 @@ TARGET_LINK_LIBRARIES(
 		slplugin
 		slutils
 		mseed
-		${Boost_system_LIBRARY}
 		${Boost_program_options_LIBRARY}
 		${CRYPTO}
 		${SSL}
 )
+
+IF(Boost_system_FOUND)
+	TARGET_LINK_LIBRARIES(caps_plugin ${Boost_system_LIBRARY})
+ENDIF()
 
 INSTALL(TARGETS caps_plugin RUNTIME DESTINATION ${SEEDLINK_PLUGIN_OUTPUT_DIR})
 

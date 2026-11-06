@@ -31,15 +31,14 @@
 #include <plugin.h>
 #include <libslink.h>
 
-#include <boost/bind.hpp>
 #include <boost/algorithm/string/split.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/program_options.hpp>
 
 #include <algorithm>
-#include <errno.h>
+#include <cerrno>
+#include <fstream>
 #include <sstream>
-
 
 
 using namespace std;
@@ -80,7 +79,7 @@ inline void LogDebug(const char *fmt, ...) {
 class FlagCounter: public boost::program_options::untyped_value {
 	public:
 		FlagCounter(unsigned int* count);
-		void xparse(boost::any&, const vector<string>&) const;
+		void xparse(boost::any&, const vector<string>&) const override;
 
 	private:
 		unsigned int* _count;
@@ -169,8 +168,8 @@ struct LogChannel {
 // >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
 App::App(int argc, char** argv) : Application(argc, argv) {
 	_exitRequested = false;
-	_sessionTable.setItemAddedFunc(boost::bind(&App::itemAdded, this, _1));
-	_sessionTable.setItemAboutToBeRemovedFunc(boost::bind(&App::itemAboutToBeRemoved, this, _1));
+	_sessionTable.setItemAddedFunc(bind(&App::itemAdded, this, placeholders::_1));
+	_sessionTable.setItemAboutToBeRemovedFunc(bind(&App::itemAboutToBeRemoved, this, placeholders::_1));
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -534,12 +533,10 @@ bool App::run() {
 							continue;
 						}
 
-						if ( !storeRawPacket(rawRec) ) {
-							continue;
+						if ( storeRawPacket(rawRec) ) {
+							setStreamState(_currentItem->streamID, rawRec.endTime());
+							_currentItem->startTime = rawRec.endTime();
 						}
-
-						setStreamState(_currentItem->streamID, rawRec.endTime());
-						_currentItem->startTime = rawRec.endTime();
 					}
 					// miniSEED Packets
 					else if ( _currentItem->type ==  MSEEDPacket ) {
@@ -606,8 +603,14 @@ bool App::storeRawPacket(RawDataRecord &rec) {
 	int32_t dataSize = rec.buffer()->size() / sizeof(int32_t);
 
 	SessionTableItem *item = _currentItem;
-	return send_raw_depoch((item->net + "." + item->sta).c_str(), item->cha.c_str(),
-	                       rec.startTime(), 0, -1, data, dataSize);
+	int r = send_raw_depoch((item->net + "." + item->sta).c_str(), item->cha.c_str(),
+	                        rec.startTime(), 0, -1, data, dataSize);
+	if ( r < 0 ) {
+		LogError("Link to SeedLink broken: %d: %s", r, strerror(r));
+		exit(1);
+	}
+
+	return r > 0;
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
@@ -686,6 +689,7 @@ bool App::storeMSEEDPacket(MSEEDDataRecord &rec) {
 		struct ptime pt;
 		rec.startTime().get2(&pt.year, &pt.yday,
 		                     &pt.hour, &pt.minute, &pt.second, &pt.usec);
+		pt.usec += usec99;
 
 		char id[sizeof(msr->fsdh.network) + 1 + sizeof(msr->fsdh.station) + 1] = {0};
 		strncat(id, msr->fsdh.network, sizeof(msr->fsdh.network));
@@ -706,16 +710,16 @@ bool App::storeMSEEDPacket(MSEEDDataRecord &rec) {
 		r = send_mseed((item->net + "." + item->sta).c_str(), rec.data()->data(), rec.data()->size());
 	}
 
-	if ( r <= 0 ) {
+	if ( r < 0 ) {
 		LogError("Link to SeedLink broken: %d: %s", r, strerror(r));
-		return false;
+		exit(1);
 	}
 
 	CAPS_DEBUG("%s.%s.%s: published record, next sample time at %s",
 	           item->sta.c_str(), item->loc.c_str(), item->cha.c_str(),
 	           rec.endTime().toString("%F %T").c_str());
 
-	return true;
+	return r > 0;
 }
 // <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 
