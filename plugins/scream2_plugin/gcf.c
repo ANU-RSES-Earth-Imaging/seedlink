@@ -49,12 +49,14 @@ void a_fatal (char * str)
 static time_t
 gcf_time_to_time_t (gcf_time * t)
 {
-  time_t ret = GCF_EPOCH;
-
-  ret += (t->day) * 24 * 60 * 60;
-  ret += (t->sec);
-
-  return ret;
+time_t ret = GCF_EPOCH;
+ret += (t->day) * 86400; //24 * 60 * 60;
+ret += (t->sec);
+//if ( ret < 1325376000 ) // if epoch time before jan 1 2012 (RCP edit)
+//{
+//ret += 619315200; // add 1024 weeks
+//}
+return ret;
 }
 
 static void
