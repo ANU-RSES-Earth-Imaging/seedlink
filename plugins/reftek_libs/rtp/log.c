@@ -242,7 +242,7 @@ VOID rtp_log(UINT16 level, CHAR *fmt, ...)
    #ifdef HAVE_SYSLOGD
       if (using_syslogd)
          {
-         syslog(LOG_INFO, Crnt_msg);
+         syslog(LOG_INFO, "%s", Crnt_msg);
          MUTEX_UNLOCK(&Mutex);
          return ;
          }
