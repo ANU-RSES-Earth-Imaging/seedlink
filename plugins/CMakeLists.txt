@@ -20,6 +20,7 @@ IF ( NOT MACOSX )
 			naqsplugin
 			optodas_plugin
 			q330plugin
+			reftek_libs
 			reftek_plugin
 			scream_plugin
 			scream2_plugin
