@@ -6,8 +6,6 @@ SET(SLARCHIVE_SOURCES
 	slarchive.c
 )
 
-INCLUDE_DIRECTORIES(../../../../libs/3rd-party/libslink)
-
 ADD_EXECUTABLE(slarchive ${SLARCHIVE_SOURCES})
 
 TARGET_LINK_LIBRARIES(slarchive slink crypto)
